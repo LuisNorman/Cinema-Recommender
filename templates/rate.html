@@ -1,0 +1,83 @@
+{% extends 'layout.html' %}
+{% block title %}Rate {{ movie['title'] }}:{% endblock %}
+
+{% block content %}
+                <form action = {{url_for('rate')}} method="POST">
+
+                    <h2>{{movie['title']}} </h2>
+                    <tr>
+                        <br><br>
+                        <div class="checkboxgroup">
+                            <label for="str1">1
+                                <input type="radio" name="rating" id={{movie['title']}} value="1">
+                            </label>
+
+                            <label for="str2">2
+                                <input type="radio" name="rating" id={{movie['title']}} value="2">
+                            </label>
+
+                            <label for="str3">3
+                                <input type="radio" name="rating" id={{movie['title']}} value="3">
+                            </label>
+
+                            <label for="str4">4
+                                <input type="radio" name="rating" id={{movie['title']}} value="4">
+                            </label>
+
+                            <label for="str5">5
+                                <input type="radio" name="rating" id={{movie['title']}} value="5">
+                            </label>
+
+                            <label for="str6">6
+                                <input type="radio" name="rating" id={{movie['title']}} value="6">
+                            </label>
+
+                            <label for="str7">7
+                                <input type="radio" name="rating" id={{movie['title']}} value="7">
+                            </label>
+
+                            <label for="str8">8
+                                <input type="radio" name="rating" id={{movie['title']}} value="8">
+                            </label>
+
+                            <label for="str9">9
+                                <input type="radio" name="rating" id={{movie['title']}} value="9">
+                            </label>
+
+                            <label for="str10">10
+                                <input type="radio" name="rating" id={{movie['title']}} value="10">
+                            </label>
+                        </div>
+                    </tr><br>
+                    <button type="submit" name=movieid value="{{ movie['id']}}">Rate</button>
+{#                    <input type="submit" data-id="{{ movie['title']}}" name="movieid" value="{{ movie['id'] }}">#}
+                </form>
+
+
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/2.1.1/jquery.min.js"></script>
+
+    <script type="text/javascript">
+    /*
+        $(document).ready(function(){
+            // Check Radio-box
+
+            $(".rating input:radio").attr("checked", false);
+
+            $('.rating input').click(function () {
+                $(".rating span").removeClass('checked');
+                $(this).parent().addClass('checked');
+            });
+            // if it changes - show this
+
+            $('input:radio').change(
+                function () {
+                    var userRating = this.value;
+                    var id = this.id;
+                    alert(userRating + ": " + id);
+                })
+        });
+
+     */
+    </script>
+
+{% endblock %}

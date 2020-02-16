@@ -1,0 +1,70 @@
+{% extends 'layout.html' %}
+{% block title %}Profile{% endblock %}
+
+{% block content %}
+    <h2>Profile Page</h2>
+    <div>
+        <p>Your account details are below:</p>
+        <table>
+            <tr>
+                <td>Username:</td>
+                <td>{{ user['Username'] }}</td>
+            </tr>
+            <tr>
+                <td>Password:</td>
+                <td>{{ user['Password'] }}</td>
+            </tr>
+        </table>
+    </div>
+
+    <div>
+        <h3><u>Movies you have rated</u></h3>
+        {% for movie in ratedMovies %}
+            <div>
+                <tr>
+                    <td>{{movie['title']}}: {{movie['rating']}}</td>
+                    <br>
+                    <br>
+                </tr>
+            </div>
+        {% endfor %}
+    </div>
+
+    <div>
+        <h3><u>Movies you haven't rated</u></h3>
+        {% for movie in unratedMovies %}
+                <form action = {{url_for('profile')}} method="POST">
+                    <td>{{movie['title']}} </td>
+{#                    <input type="submit"  name=movieid value="{{ movie['title']}}">#}
+                    <button type="submit" name=movieid value="{{ movie['id']}}">Rate</button>
+                </form>
+            <br>
+        {% endfor %}
+    </div>
+
+{#    <script src="https://ajax.googleapis.com/ajax/libs/jquery/2.1.1/jquery.min.js"></script>#}
+{##}
+{#    <script type="text/javascript">#}
+{##}
+{#        $(document).ready(function(){#}
+{#            // Check Radio-box#}
+{#            /*#}
+{#            $(".rating input:radio").attr("checked", false);#}
+{##}
+{#            $('.rating input').click(function () {#}
+{#                $(".rating span").removeClass('checked');#}
+{#                $(this).parent().addClass('checked');#}
+{#            });#}
+{#            */#}
+{##}
+{#            // if it changes - show this#}
+{#            $('input:radio').change(#}
+{#                function () {#}
+{#                    var userRating = this.value;#}
+{#                    var id = this.id;#}
+{#                    alert(userRating + ": " + id);#}
+{#                })#}
+{#        });#}
+{#    </script>#}
+
+{% endblock %}
