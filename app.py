@@ -1,6 +1,7 @@
 from flask import Flask, render_template, request, redirect, url_for, session
 import pymysql
 import re
+import math
 
 app = Flask(__name__)
 
@@ -104,6 +105,7 @@ def home():
 # http://localhost:5000/pythinlogin/profile - this will be the profile page, only accessible for loggedin users
 @app.route('/profile', methods=['GET', 'POST'])
 def profile():
+    computeCosSim()
     # Check if user is loggedin
     if 'loggedin' in session and request.method == 'GET':
         # We need all the user info for the user so we can display it on the profile page
@@ -160,14 +162,44 @@ def success():
 def unsuccessful():
     return render_template('unsuccessful.html')
 
-def computeSimUsers():
+def computeCosSim():
     cursor = connection.cursor(pymysql.cursors.DictCursor)
     cursor.execute("select round(avg(rating),0) as avg_rating from rating where userid = %s", session['Id'])
     rating_dict = cursor.fetchone()
     avg_rating = rating_dict['avg_rating']
-    cursor.execute("select round from rating where userid = %s", session['Id'])
-    ratings = cursor.fetchall()
+    cursor.execute("select * from rating where userid = %s", session['Id'])
+    target_user_ratings = cursor.fetchall()
+    cursor.execute("select id from user")
+    id_arr = cursor.fetchall()
+    similarities = []
 
+    # Compute User-Based Cos Similarities
+    # // Loop to every user except target
+    # Get current user ratings and compare with every target user rating
+    # If similar, multiply them (dot product)
+    for current_id in id_arr :
+        sum = 0
+        if current_id["id"] != session["Id"] :
+            cursor.execute("select * from rating where userid = %s", current_id["id"])
+            current_user_ratings = cursor.fetchall()
+        if (cursor.rowcount != 0):
+            A = 0
+            B = 0
+            for target_rating in target_user_ratings :
+                A = A + (target_rating["Rating"])
+                for current_rating in current_user_ratings:
+                    B = B + (current_rating["Rating"])
+                    print(target_rating)
+                    if (target_rating["MovieId"] == current_rating["MovieId"]):
+                        sum = sum + (target_rating["Rating"] * current_rating["Rating"])
+                # Compute Cos Sim
+                similarities.append(sum/(math.sqrt(A)*math.sqrt(B)))
+
+
+    similarities.sort()
+    for similarity in similarities:
+        print(similarity)
+    print(len(similarities))
 
 
 
