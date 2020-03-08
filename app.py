@@ -19,6 +19,7 @@ def login():
     msg = ''
     # Check if "username" and "password" POST requests exist (user submitted form)
     if request.method == 'POST' and 'username' in request.form and 'password' in request.form:
+
         # Create variables for easy access
         username = request.form['username']
         password = request.form['password']
@@ -27,6 +28,8 @@ def login():
         cursor.execute('SELECT * FROM User WHERE username = %s AND password = %s', (username, password))
         # Fetch one record and return result
         user = cursor.fetchone()
+        print("login")
+        print( user['Id'])
         # If user exists in user table in out database
         if user:
             # Create session data, we can access this data in other routes
@@ -58,14 +61,14 @@ def register():
     # Output message if something goes wrong...
     msg = ''
     # Check if "username", "password" POST requests exist (user submitted form)
-    if request.method == 'POST' and 'Username' in request.form and 'Password' in request.form:
+    if request.method == 'POST' and 'username' in request.form and 'password' in request.form:
         # Create variables for easy access
         username = request.form['username']
         password = request.form['password']
         # Check if user exists using MySQL
         cursor = connection.cursor(pymysql.cursors.DictCursor)
         cursor.execute('SELECT * FROM User WHERE username = %s', username)
-        user = cursor.fetchone()
+        user = cursor.fetchall()
         # If user exists show error and validation checks
         if user:
             msg = 'User already exists!'
@@ -74,11 +77,15 @@ def register():
         elif not username or not password:
             msg = 'Please fill out the form!'
         else:
+            cursor.execute("Select max(id) from user")
+            id_dict = cursor.fetchone()
+            id = id_dict["max(id)"] + 1
             # user doesnt exists and the form data is valid, now insert new user into user table
-            cursor.execute('INSERT INTO User VALUES (NULL, %s, %s)', (username, password))
+            cursor.execute('INSERT INTO User VALUES (%s, %s, %s)', (id, username, password))
             connection.commit()
             msg = 'You have successfully registered!'
     elif request.method == 'POST':
+
         # Form is empty... (no POST data)
         msg = 'Please fill out the form!'
     # Show registration form with message (if any)
@@ -102,10 +109,12 @@ def profile():
         # We need all the user info for the user so we can display it on the profile page
         connection = pymysql.connect("localhost", "testuser", "test123", "cinemarecommender")
         cursor = connection.cursor(pymysql.cursors.DictCursor)
-        cursor.execute('SELECT * FROM User WHERE id = %s', [session['Id']])
+        print([session['Id']])
+        cursor.execute('SELECT * FROM User WHERE id = %s', session['Id'])
         user = cursor.fetchone()
         # We need to retrieves all movies users has rated for now but later get not rated movies to rate
-        cursor.execute('select title, rating from Movie right join Rating on Id = Rating.MovieId and Rating.UserId = %s', session['Id']);
+        # cursor.execute('select title, rating from Movie inner join Rating on Id = Rating.MovieId and Rating.UserId = %s', session['Id']);
+        cursor.execute("select title, rating from rating inner join movie on movieid = movie.id where userid = %s", session['Id'])
         ratedMovies = cursor.fetchall()
         cursor.execute('select title, id from Movie where Id not in (select Id from Movie full join Rating on Id = Rating.MovieId and Rating.UserId = %s)', session['Id']);
         unratedMovies = cursor.fetchall()
