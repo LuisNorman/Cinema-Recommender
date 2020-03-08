@@ -160,5 +160,16 @@ def success():
 def unsuccessful():
     return render_template('unsuccessful.html')
 
+def computeSimUsers():
+    cursor = connection.cursor(pymysql.cursors.DictCursor)
+    cursor.execute("select round(avg(rating),0) as avg_rating from rating where userid = %s", session['Id'])
+    rating_dict = cursor.fetchone()
+    avg_rating = rating_dict['avg_rating']
+    cursor.execute("select round from rating where userid = %s", session['Id'])
+    ratings = cursor.fetchall()
+
+
+
+
 if __name__ == '__main__':
     app.run(debug=True)
