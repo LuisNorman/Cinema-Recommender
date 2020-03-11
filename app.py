@@ -3,6 +3,7 @@ import pymysql
 import re
 import math
 import decimal
+from operator import itemgetter
 
 app = Flask(__name__)
 
@@ -108,8 +109,8 @@ def home():
 def profile():
     # Check if user is loggedin
     if 'loggedin' in session and request.method == 'GET':
-        # computePearsonSim()
-        computeCosSim()
+        computePearsonSim()
+        # computeCosSim()
         # We need all the user info for the user so we can display it on the profile page
         connection = pymysql.connect("localhost", "testuser", "test123", "cinemarecommender")
         cursor = connection.cursor(pymysql.cursors.DictCursor)
@@ -164,9 +165,10 @@ def success():
 def unsuccessful():
     return render_template('unsuccessful.html')
 
-similarities = {}
+cosSimilarities = {}
 
 def computeCosSim():
+    cosSimilarities = {}
     cursor = connection.cursor(pymysql.cursors.DictCursor)
     cursor.execute("select round(avg(rating),0) as avg_rating from rating where userid = %s", session['Id'])
     rating_dict = cursor.fetchone()
@@ -194,7 +196,6 @@ def computeCosSim():
                 A = target_rating["Rating"] - target_avg_rating
                 for current_rating in current_user_ratings:
                     B = current_rating["Rating"] - current_avg_rating
-                    # print(target_rating)
                     if (target_rating["MovieId"] == current_rating["MovieId"]):
                         num = num + A * B
                         AA = AA + A*A
@@ -204,20 +205,20 @@ def computeCosSim():
             den = decimal.Decimal(den)
             # Compute Cos Sim
             if (AA != 0 and BB != 0):
-                similarities[current_id["id"]] = num/(den)
+                cosSimilarities[current_id["id"]] = num/(den)
             else:
-                similarities[current_id["id"]] = den
+                cosSimilarities[current_id["id"]] = den
 
-    print(sorted(similarities.values()))
-    # for key in similarities:
-    #     print(similarities[key])
-    print(len(similarities))
+    # cosSimilarities = sorted(cosSimilarities.values(), reverse = True)
+    # print(cosSimilarities)
+    # print(len(cosSimilarities))
 
 
 pearson_similarities = {}
 def computePearsonSim():
+    pearson_similarities = {}
     cursor = connection.cursor(pymysql.cursors.DictCursor)
-    cursor.execute("select round(avg(rating),0) as avg_rating from rating where userid = %s", session['Id'])
+    cursor.execute("select avg(rating) as avg_rating from rating where userid = %s", session['Id'])
     rating_dict = cursor.fetchone()
     target_avg_rating = rating_dict['avg_rating']
 
@@ -234,7 +235,7 @@ def computePearsonSim():
         if current_id["id"] != session["Id"] :
             cursor.execute("select * from rating where userid = %s", current_id["id"])
             current_user_ratings = cursor.fetchall()
-            cursor.execute("select round(avg(rating),0) as avg_rating from rating where userid = %s", current_id['id'])
+            cursor.execute("select avg(rating) as avg_rating from rating where userid = %s", current_id['id'])
             rating_dict = cursor.fetchone()
             current_avg_rating = rating_dict['avg_rating']
             AA = 0
@@ -254,19 +255,77 @@ def computePearsonSim():
             if den != 0:
                 pearson_similarities[current_id["id"]] = num/den
             else:
-                pearson_similarities[current_id["id"]] = den
+                pearson_similarities[current_id["id"]] = decimal.Decimal(0)
 
-    print(sorted(pearson_similarities.values()))
-    # for key in similarities:
-    #     print(similarities[key])
-    print(len(pearson_similarities))
+    pearson_similarities = sorted(pearson_similarities.items(), key=itemgetter(1), reverse=True)
+    print(pearson_similarities)
+    computePredictions(pearson_similarities)
 
-def computePredictions():
-    sorted(similarities.values())
+def computePredictions(similarities):
     cursor = connection.cursor(pymysql.cursors.DictCursor)
-    cursor.execute("select round(avg(rating),0) as avg_rating from rating where userid = %s", session['Id'])
+    cursor.execute("select avg(rating) as avg_rating from rating where userid = %s", session['Id'])
     rating_dict = cursor.fetchone()
-    avg_rating = rating_dict['avg_rating']
+    target_avg_rating = rating_dict['avg_rating']
+    cursor.execute("select * from rating where userid <> %s", session['Id'])
+    ratings = cursor.fetchall()
+
+    cursor.execute("select id, title from movie")
+    movies = cursor.fetchall()
+    total_movies = cursor.rowcount
+    m=0
+    recommended_movies = [[]]
+    for movie in movies:
+        movieid = movie["id"]
+        recommendation = []
+        cursor.execute("select * from rating where UserId = %s and MovieId = %s", (session['Id'], movieid))
+        t = cursor.fetchone()
+        target_seen = cursor.rowcount
+        if target_seen > 0:
+            print("target user rated movie")
+        else:
+
+            if m == 50:
+                print("Finished")
+                break
+            m=m+1
+            i=0
+            num = 0
+            den = 0
+            for x, y in similarities:
+                if i == 3:
+                    break
+                else:
+                    #check if similar user has rated movie
+                    # if so compute and store prediction
+                    cursor.execute("select * from rating where UserId = %s and MovieId = %s", (str(x), movieid))
+                    result = cursor.fetchone()
+                    current_seen = cursor.rowcount
+                    if current_seen > 0:
+                        current_rating = result["Rating"]
+                        cursor.execute("select avg(rating) as avg_rating from rating where userid = %s",
+                                       str(x))
+                        rating = cursor.fetchone()
+                        current_avg_rating = rating["avg_rating"]
+                        num = num + ((result["Rating"]-current_avg_rating)*y)
+                        den = den + y
+                        i = i + 1
+                        print("FOUND COMPARISON - " + str(movie["title"]) + ": " + str(current_rating))
+                        print(result)
+                        print("currecnt avg rating: "+str(current_avg_rating))
+                        print("sim: " + str(y))
+            if den == 0:
+                score = target_avg_rating + 0
+            else:
+                score = target_avg_rating + (num/den)
+            recommendation = (movie["title"], score)
+            print("Recommendation: " + str(recommendation))
+            recommended_movies.append(recommendation)
+
+
+
+
+
+
 
 
 
