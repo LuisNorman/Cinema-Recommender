@@ -1,0 +1,20 @@
+{% extends 'layout.html' %}
+{% block title %}User-Based Recommendations:{% endblock %}
+
+{% block content %}
+    <h2>User-Based Recommendations</h2>
+    <div>
+        <h3><u>Recommended Movies</u></h3>
+        {% for movie in recommended_movies %}
+            <div>
+                <tr>
+                    <td>{{movie[0]}}: Predicted Rating = {{movie[1]}}</td>
+                    <br>
+                    <br>
+                </tr>
+            </div>
+        {% endfor %}
+    </div>
+
+
+{% endblock %}

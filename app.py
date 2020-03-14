@@ -5,6 +5,7 @@ import math
 import decimal
 from operator import itemgetter
 from datetime import datetime
+import csv
 
 app = Flask(__name__)
 
@@ -110,9 +111,8 @@ def home():
 def profile():
     # Check if user is loggedin
     if 'loggedin' in session and request.method == 'GET':
-        # computePearsonSim()
-        # computeCosSim()
-        computeItemBasedSim()
+        computePearsonSim()
+        # computeItemBasedSim()
         # We need all the user info for the user so we can display it on the profile page
         connection = pymysql.connect("localhost", "testuser", "test123", "cinemarecommender")
         cursor = connection.cursor(pymysql.cursors.DictCursor)
@@ -167,9 +167,9 @@ def success():
 def unsuccessful():
     return render_template('unsuccessful.html')
 
-pearson_similarities = {}
 def computePearsonSim():
     pearson_similarities = {}
+
     cursor = connection.cursor(pymysql.cursors.DictCursor)
     cursor.execute("select avg(rating) as avg_rating from rating where userid = %s", session['Id'])
     rating_dict = cursor.fetchone()
@@ -202,10 +202,9 @@ def computePearsonSim():
                     if (target_rating["MovieId"] == current_rating["MovieId"]):
                         A = ((target_rating["Rating"]) - target_avg_rating)
                         B = ((current_rating["Rating"]) - current_avg_rating)
+                        num = num + (A*B)
                         AA = AA + A * A
                         BB = BB + B * B
-                        num = num + (A*B)
-                        break # not necessary bc there are no duplicate movies but helps exits the loop when finds it match
             # Once we aggregated all the values on numerator and denominator, we can divide them to get our similarity
             den = math.sqrt(AA*BB)
             num = decimal.Decimal(num)
@@ -217,10 +216,13 @@ def computePearsonSim():
                 pearson_similarities[current_id["id"]] = decimal.Decimal(0)
 
     pearson_similarities = sorted(pearson_similarities.items(), key=itemgetter(1), reverse=True)
-    print(pearson_similarities)
-    computePredictions(pearson_similarities)
+    # print(pearson_similarities)
+    # computePredictions(pearson_similarities)
+    return pearson_similarities;
 
-def computePredictions(similarities):
+@app.route('/userbased', methods=['GET'])
+def computePredictions():
+    similarities = computePearsonSim()
     cursor = connection.cursor(pymysql.cursors.DictCursor)
     cursor.execute("select avg(rating) as avg_rating from rating where userid = %s", session['Id'])
     rating_dict = cursor.fetchone()
@@ -232,17 +234,14 @@ def computePredictions(similarities):
     movies = cursor.fetchall()
     total_movies = cursor.rowcount
     m=0
-    recommended_movies = [[]]
+    recommended_movies = []
     for movie in movies:
         movieid = movie["id"]
-        recommendation = []
         cursor.execute("select * from rating where UserId = %s and MovieId = %s", (session['Id'], movieid))
-        t = cursor.fetchone()
         target_seen = cursor.rowcount
         if target_seen > 0:
             print("target user rated movie")
         else:
-
             if m == 50:
                 print("Finished")
                 break
@@ -268,19 +267,19 @@ def computePredictions(similarities):
                         num = num + ((result["Rating"]-current_avg_rating)*y)
                         den = den + y
                         i = i + 1
-                        print("FOUND COMPARISON - " + str(movie["title"]) + ": " + str(current_rating))
-                        print(result)
-                        print("currecnt avg rating: "+str(current_avg_rating))
-                        print("sim: " + str(y))
             if den == 0:
                 score = target_avg_rating + 0
             else:
                 score = target_avg_rating + (num/den)
             recommendation = (movie["title"], score)
-            print("Recommendation: " + str(recommendation))
             recommended_movies.append(recommendation)
+    recommended_movies = sorted(recommended_movies, key=itemgetter(1), reverse=True)
+    # print(recommended_movies)
+    return render_template('userbased.html', recommended_movies=recommended_movies)
 
 similarities = {}
+
+
 # Objective: Retrieve the similarities of every movie to one another
 def computeItemBasedSim():
     now = datetime.now()
@@ -295,17 +294,15 @@ def computeItemBasedSim():
     movieTitleDict = {}
 
     # Nestedly loop through every movie
-    # for i in range(0, movieCount-1):
+    i=0
     for movie1 in movies:
         # movie1 = movies[i]      .
-        # if i == 1:
+        # if i == 2300:
         #     break
+        # i = i+1
         currentSimilarities = {}
-        # for j in range(i+1, movieCount):
-            # print("i="+str(i)+" j="+str(j)
             # Set up the data structures to compute the similarity and hold the movie information
         for movie2 in movies:
-            # movie2 = movies[j]
             if movie1["Id"] != movie2["Id"]:
                 a = 0
                 b = 0
@@ -499,35 +496,67 @@ def computeItemBasedSim():
         similarities[movie1["Id"]] = currentSimilarities
         movieTitleDict[movie1["Id"]] = movie1["Title"]
 
-
     # Iterate over each nested dictionary and sort it in descending order for easy retrieval
     for x in similarities.keys():
         similarities[x] = sorted(similarities[x].items(), key=itemgetter(1), reverse=True)
 
     # Add each movie and its similar movies to an excel file
-    i = 0
+    totalSimList = [[]]
     for x in similarities:
-        if i == 1000:
-            break
-        i = i + 1
+        list = [x]
         temp = similarities[x]
-        print("the most similar movies for " + str(movieTitleDict[x]) +" are: ")
+        # print("the most similar movies for " + str(movieTitleDict[x]) +" are: ")
         for y in temp:
             movieId = y[0]
             movieTitle = movieTitleDict[movieId]
-            print("Sim:" +str(movieTitle))
+            list.append(movieTitle)
+            # print("Sim:" +str(movieTitle))
+        totalSimList.append(list)
+
+    # with open('item_based_recommendations.csv', mode='w') as item_based_recommendations:
+    csvfile = open('item_based_recommendations.csv', 'w', newline='')
+    obj = csv.writer(csvfile)
+    for currentSimList in totalSimList:
+        obj.writerow(currentSimList)
+    csvfile.close()
 
     now = datetime.now()
 
     end_time = now.strftime("%H:%M:%S")
     print("start time: " + str(start_time))
     print("end time: " + str(end_time))
-    # print(similarities)
 
+@app.route('/itembased', methods=['GET'])
+def getItemBasedPredictions():
 
+    # get all the target user's ratings
+    cursor = connection.cursor(pymysql.cursors.DictCursor)
+    cursor.execute("select * from rating where userid = %s", session["Id"])
+    target_ratings = cursor.fetchall()
+    r_count = cursor.rowcount
+    alpha = 20/r_count
+    recommended_movies = {}
+    with open('item_based_recommendations.csv') as csvfile:
+        reader = csv.reader(csvfile, delimiter=',')
+        for rating_dict in target_ratings:
+            movieid = rating_dict["MovieId"]
+            rating = rating_dict["Rating"]
+            i=0
+            for row in reader:
+                if row != []:
+                    if str(row[0]) == str(movieid):
+                        j=0
+                        for col in row:
+                            if j != 0:
+                                recommended_movies[str(col)] = int(rating)
+                                if i == alpha:
+                                    break;
+                                i = i + 1
+                            j = j + 1
+                        break;
 
-
-
+    recommended_movies = sorted(recommended_movies.items(), key=itemgetter(1), reverse=True)
+    return render_template('itembased.html', recommended_movies=recommended_movies)
 
 if __name__ == '__main__':
     app.run(debug=True)
