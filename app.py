@@ -4,6 +4,7 @@ import re
 import math
 import decimal
 from operator import itemgetter
+from datetime import datetime
 
 app = Flask(__name__)
 
@@ -109,8 +110,9 @@ def home():
 def profile():
     # Check if user is loggedin
     if 'loggedin' in session and request.method == 'GET':
-        computePearsonSim()
+        # computePearsonSim()
         # computeCosSim()
+        computeItemBasedSim()
         # We need all the user info for the user so we can display it on the profile page
         connection = pymysql.connect("localhost", "testuser", "test123", "cinemarecommender")
         cursor = connection.cursor(pymysql.cursors.DictCursor)
@@ -165,55 +167,6 @@ def success():
 def unsuccessful():
     return render_template('unsuccessful.html')
 
-cosSimilarities = {}
-
-def computeCosSim():
-    cosSimilarities = {}
-    cursor = connection.cursor(pymysql.cursors.DictCursor)
-    cursor.execute("select round(avg(rating),0) as avg_rating from rating where userid = %s", session['Id'])
-    rating_dict = cursor.fetchone()
-    target_avg_rating = rating_dict['avg_rating']
-    cursor.execute("select * from rating where userid = %s", session['Id'])
-    target_user_ratings = cursor.fetchall()
-    cursor.execute("select id from user")
-    id_arr = cursor.fetchall()
-
-    # Compute User-Based Cos Similarities
-    # Loop through every user except target
-    # Compute similarity on target and current user ratings
-    for current_id in id_arr:
-        current_user_ratings = []
-        if current_id["id"] != session["Id"] :
-            cursor.execute("select * from rating where userid = %s", current_id["id"])
-            current_user_ratings = cursor.fetchall()
-            cursor.execute("select round(avg(rating),0) as avg_rating from rating where userid = %s", current_id['id'])
-            rating_dict = cursor.fetchone()
-            current_avg_rating = rating_dict['avg_rating']
-            num = 0
-            AA = 0
-            BB = 0
-            for target_rating in target_user_ratings :
-                A = target_rating["Rating"] - target_avg_rating
-                for current_rating in current_user_ratings:
-                    B = current_rating["Rating"] - current_avg_rating
-                    if (target_rating["MovieId"] == current_rating["MovieId"]):
-                        num = num + A * B
-                        AA = AA + A*A
-                        BB = BB + B*B
-            num = decimal.Decimal(num)
-            den = math.sqrt(AA*BB)
-            den = decimal.Decimal(den)
-            # Compute Cos Sim
-            if (AA != 0 and BB != 0):
-                cosSimilarities[current_id["id"]] = num/(den)
-            else:
-                cosSimilarities[current_id["id"]] = den
-
-    # cosSimilarities = sorted(cosSimilarities.values(), reverse = True)
-    # print(cosSimilarities)
-    # print(len(cosSimilarities))
-
-
 pearson_similarities = {}
 def computePearsonSim():
     pearson_similarities = {}
@@ -227,31 +180,37 @@ def computePearsonSim():
     cursor.execute("select id from user")
     id_arr = cursor.fetchall()
 
-    # Compute User-Based Pearson Similarities
     # Loop through every user except target
     # Compute similarity on target and current user ratings
     for current_id in id_arr :
-        sum = 0
+        # Ensure we do not compute similarity on target user
         if current_id["id"] != session["Id"] :
+            # Get the current user's ratings and avg rating
             cursor.execute("select * from rating where userid = %s", current_id["id"])
             current_user_ratings = cursor.fetchall()
             cursor.execute("select avg(rating) as avg_rating from rating where userid = %s", current_id['id'])
             rating_dict = cursor.fetchone()
             current_avg_rating = rating_dict['avg_rating']
+            # initialize variables used to compute the similarity
             AA = 0
             BB = 0
             num = 0
+            ## For every target user's ratings, we loop through the current user's rating and find if they have rated that movie
             for target_rating in target_user_ratings :
                 for current_rating in current_user_ratings:
+                    # if user has rated movie, we can compute and aggregate the values to compute the similarity
                     if (target_rating["MovieId"] == current_rating["MovieId"]):
                         A = ((target_rating["Rating"]) - target_avg_rating)
                         B = ((current_rating["Rating"]) - current_avg_rating)
                         AA = AA + A * A
                         BB = BB + B * B
                         num = num + (A*B)
+                        break # not necessary bc there are no duplicate movies but helps exits the loop when finds it match
+            # Once we aggregated all the values on numerator and denominator, we can divide them to get our similarity
             den = math.sqrt(AA*BB)
             num = decimal.Decimal(num)
             den = decimal.Decimal(den)
+            # Must check if denominator = 0 / No similarity so we don't get an error
             if den != 0:
                 pearson_similarities[current_id["id"]] = num/den
             else:
@@ -321,8 +280,249 @@ def computePredictions(similarities):
             print("Recommendation: " + str(recommendation))
             recommended_movies.append(recommendation)
 
+similarities = {}
+# Objective: Retrieve the similarities of every movie to one another
+def computeItemBasedSim():
+    now = datetime.now()
+
+    start_time = now.strftime("%H:%M:%S")
+
+    similarities = {}
+    cursor = connection.cursor(pymysql.cursors.DictCursor)
+    cursor.execute("select * from movie")
+    movies = cursor.fetchall()
+    movieCount = cursor.rowcount
+    movieTitleDict = {}
+
+    # Nestedly loop through every movie
+    # for i in range(0, movieCount-1):
+    for movie1 in movies:
+        # movie1 = movies[i]      .
+        # if i == 1:
+        #     break
+        currentSimilarities = {}
+        # for j in range(i+1, movieCount):
+            # print("i="+str(i)+" j="+str(j)
+            # Set up the data structures to compute the similarity and hold the movie information
+        for movie2 in movies:
+            # movie2 = movies[j]
+            if movie1["Id"] != movie2["Id"]:
+                a = 0
+                b = 0
+                num = 0
+
+                # if the movies have the same genre, we aggregate 1 to the numerator and add 1 to the distance of movie1 and movie2
+                if str(movie1["Action"]) == "1" and str(movie2["Action"]) == "1":
+                    num = num + 1
+                    a = a + 1
+                    b = b + 1
+                # if one of the movies have the specific genre, we can add 1 to its distance and nothing the numerator bc it cancels out when you multiply against a non genre
+                elif str(movie1["Action"]) == "None" and str(movie2["Action"]) == "1":
+                    b = b + 1
+                elif str(movie1["Action"]) == "1" and str(movie2["Action"]) == "None":
+                    a = a + 1
+
+                if str(movie1["Adventure"]) == "1" and str(movie2["Adventure"]) == "1":
+                    num = num + 1
+                    a = a + 1
+                    b = b + 1
+                elif str(movie1["Adventure"]) == "None" and str(movie2["Adventure"]) == "1":
+                    b = b + 1
+                elif str(movie1["Adventure"]) == "1" and str(movie2["Adventure"]) == "None":
+                    a = a + 1
+
+                if str(movie1["Animation"]) == "1" and str(movie2["Animation"]) == "1":
+                    num = num + 1
+                    a = a + 1
+                    b = b + 1
+                elif str(movie1["Animation"]) == "None" and str(movie2["Animation"]) == "1":
+                    b = b + 1
+                elif str(movie1["Animation"]) == "1" and str(movie2["Animation"]) == "None":
+                    a = a + 1
+
+                if str(movie1["Children"]) == "1" and str(movie2["Children"]) == "1":
+                    num = num + 1
+                    a = a + 1
+                    b = b + 1
+                elif str(movie1["Children"]) == "None" and str(movie2["Children"]) == "1":
+                    b = b + 1
+                elif str(movie1["Children"]) == "1" and str(movie2["Children"]) == "None":
+                    a = a + 1
+
+                if str(movie1["Comedy"]) == "1" and str(movie2["Comedy"]) == "1":
+                    num = num + 1
+                    a = a + 1
+                    b = b + 1
+                elif str(movie1["Comedy"]) == "None" and str(movie2["Comedy"]) == "1":
+                    b = b + 1
+                elif str(movie1["Comedy"]) == "1" and str(movie2["Comedy"]) == "None":
+                    a = a + 1
+
+                if str(movie1["Crime"]) == "1" and str(movie2["Crime"]) == "1":
+                    num = num + 1
+                    a = a + 1
+                    b = b + 1
+                elif str(movie1["Crime"]) == "None" and str(movie2["Crime"]) == "1":
+                    b = b + 1
+                elif str(movie1["Crime"]) == "1" and str(movie2["Crime"]) == "None":
+                    a = a + 1
+
+                if str(movie1["Documentary"]) == "1" and str(movie2["Documentary"]) == "1":
+                    num = num + 1
+                    a = a + 1
+                    b = b + 1
+                elif str(movie1["Documentary"]) == "None" and str(movie2["Documentary"]) == "1":
+                    b = b + 1
+                elif str(movie1["Documentary"]) == "1" and str(movie2["Documentary"]) == "None":
+                    a = a + 1
+
+                if str(movie1["Drama"]) == "1" and str(movie2["Drama"]) == "1":
+                    num = num + 1
+                    a = a + 1
+                    b = b + 1
+                elif str(movie1["Drama"]) == "None" and str(movie2["Drama"]) == "1":
+                    b = b + 1
+                elif str(movie1["Drama"]) == "1" and str(movie2["Drama"]) == "None":
+                    a = a + 1
+
+                if str(movie1["Fantasy"]) == "1" and str(movie2["Fantasy"]) == "1":
+                    num = num + 1
+                    a = a + 1
+                    b = b + 1
+                elif str(movie1["Fantasy"]) == "None" and str(movie2["Fantasy"]) == "1":
+                    b = b + 1
+                elif str(movie1["Fantasy"]) == "1" and str(movie2["Fantasy"]) == "None":
+                    a = a + 1
+
+                if str(movie1["Film_Noir"]) == "1" and str(movie2["Film_Noir"]) == "1":
+                    num = num + 1
+                    a = a + 1
+                    b = b + 1
+                elif str(movie1["Film_Noir"]) == "None" and str(movie2["Film_Noir"]) == "1":
+                    b = b + 1
+                elif str(movie1["Film_Noir"]) == "1" and str(movie2["Film_Noir"]) == "None":
+                    a = a + 1
+
+                if str(movie1["Horror"]) == "1" and str(movie2["Horror"]) == "1":
+                    num = num + 1
+                    a = a + 1
+                    b = b + 1
+                elif str(movie1["Horror"]) == "None" and str(movie2["Horror"]) == "1":
+                    b = b + 1
+                elif str(movie1["Horror"]) == "1" and str(movie2["Horror"]) == "None":
+                    a = a + 1
+
+                if str(movie1["Musical"]) == "1" and str(movie2["Musical"]) == "1":
+                    num = num + 1
+                    a = a + 1
+                    b = b + 1
+                elif str(movie1["Musical"]) == "None" and str(movie2["Musical"]) == "1":
+                    b = b + 1
+                elif str(movie1["Musical"]) == "1" and str(movie2["Musical"]) == "None":
+                    a = a + 1
+
+                if str(movie1["Mystery"]) == "1" and str(movie2["Mystery"]) == "1":
+                    num = num + 1
+                    a = a + 1
+                    b = b + 1
+                elif str(movie1["Mystery"]) == "None" and str(movie2["Mystery"]) == "1":
+                    b = b + 1
+                elif str(movie1["Mystery"]) == "1" and str(movie2["Mystery"]) == "None":
+                    a = a + 1
+
+                if str(movie1["Romance"]) == "1" and str(movie2["Romance"]) == "1":
+                    num = num + 1
+                    a = a + 1
+                    b = b + 1
+                elif str(movie1["Romance"]) == "None" and str(movie2["Romance"]) == "1":
+                    b = b + 1
+                elif str(movie1["Romance"]) == "1" and str(movie2["Romance"]) == "None":
+                    a = a + 1
+
+                if str(movie1["Sci_Fi"]) == "1" and str(movie2["Sci_Fi"]) == "1":
+                    num = num + 1
+                    a = a + 1
+                    b = b + 1
+                elif str(movie1["Sci_Fi"]) == "None" and str(movie2["Sci_Fi"]) == "1":
+                    b = b + 1
+                elif str(movie1["Sci_Fi"]) == "1" and str(movie2["Sci_Fi"]) == "None":
+                    a = a + 1
+
+                if str(movie1["Thriller"]) == "1" and str(movie2["Thriller"]) == "1":
+                    num = num + 1
+                    a = a + 1
+                    b = b + 1
+                elif str(movie1["Thriller"]) == "None" and str(movie2["Thriller"]) == "1":
+                    b = b + 1
+                elif str(movie1["Thriller"]) == "1" and str(movie2["Thriller"]) == "None":
+                    a = a + 1
+
+                if str(movie1["War"]) == "1" and str(movie2["War"]) == "1":
+                    num = num + 1
+                    a = a + 1
+                    b = b + 1
+                elif str(movie1["War"]) == "None" and str(movie2["War"]) == "1":
+                    b = b + 1
+                elif str(movie1["War"]) == "1" and str(movie2["War"]) == "None":
+                    a = a + 1
+
+                if str(movie1["Western"]) == "1" and str(movie2["Western"]) == "1":
+                    num = num + 1
+                    a = a + 1
+                    b = b + 1
+                elif str(movie1["Western"]) == "None" and str(movie2["Western"]) == "1":
+                    b = b + 1
+                elif str(movie1["Western"]) == "1" and str(movie2["Western"]) == "None":
+                    a = a + 1
+
+                if str(movie1["IMAX"]) == "1" and str(movie2["IMAX"]) == "1":
+                    num = num + 1
+                    a = a + 1
+                    b = b + 1
+                elif str(movie1["IMAX"]) == "None" and str(movie2["IMAX"]) == "1":
+                    b = b + 1
+                    a = a + 1
+                    b = b + 1
+                elif str(movie1["IMAX"]) == "1" and str(movie2["IMAX"]) == "None":
+                    a = a + 1
+                    a = a + 1
+                    b = b + 1
+
+                # Check if there is no similarity i.e. the numerator == 0 or denominator == 0
+                if a*b == 0 or num == 0:
+                    currentSimilarities[movie2["Id"]] = 0
+                else:
+                    # If the movies have similarity, store the movieid and it's similarity value in a temp dictionary
+                    currentSimilarities[movie2["Id"]] = num/math.sqrt(a*b)
+
+        # store the current movie similarities in a dictionary
+        similarities[movie1["Id"]] = currentSimilarities
+        movieTitleDict[movie1["Id"]] = movie1["Title"]
 
 
+    # Iterate over each nested dictionary and sort it in descending order for easy retrieval
+    for x in similarities.keys():
+        similarities[x] = sorted(similarities[x].items(), key=itemgetter(1), reverse=True)
+
+    # Add each movie and its similar movies to an excel file
+    i = 0
+    for x in similarities:
+        if i == 1000:
+            break
+        i = i + 1
+        temp = similarities[x]
+        print("the most similar movies for " + str(movieTitleDict[x]) +" are: ")
+        for y in temp:
+            movieId = y[0]
+            movieTitle = movieTitleDict[movieId]
+            print("Sim:" +str(movieTitle))
+
+    now = datetime.now()
+
+    end_time = now.strftime("%H:%M:%S")
+    print("start time: " + str(start_time))
+    print("end time: " + str(end_time))
+    # print(similarities)
 
 
 
