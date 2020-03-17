@@ -1,0 +1,37 @@
+{% extends 'layout.html' %}
+{% block title %}Evaluation Metrics{% endblock %}
+
+{% block content %}
+    <h2>Evaluation Metrics</h2>
+    <div>
+        <h3><u>User-Based Metrics</u></h3>
+            <div>
+                <tr>
+                    <td>MAE = {{ userbased_MAE }}</td>
+                    <br>
+                    <br>
+                    <td>Accuracy = {{ userbased_accuracy }}</td>
+                    <br>
+                    <br>
+                </tr>
+            </div>
+    </div>
+
+    <br>
+
+    <div>
+        <h3><u>Item-Based Metrics</u></h3>
+            <div>
+                <tr>
+                    <td>MAE = {{ itembased_MAE }}</td>
+                    <br>
+                    <br>
+                    <td>Accuracy = {{ itembased_accuracy }}</td>
+                    <br>
+                    <br>
+                </tr>
+            </div>
+    </div>
+
+
+{% endblock %}
