@@ -43,19 +43,19 @@ Open MySQL Workbench
 Step 3.
 
 ```
-Create a connection
+Create a connection in MySQL Workbench
 ```
 
 Step 4.
 
 ```
-Create a database named "Cinemarecommender"
+Create a database named "Cinemarecommender" in MySQL Workbench
 ```
 
 Step 5.
 
 ```
-Create a user named "testuser" and password named "test123" that can access the cinema recommender database
+Create a user named "testuser" and password named "test123" that can access the cinema recommender database in MySQL Workbench
 ```
 
 Step 6.
@@ -79,7 +79,7 @@ Open the project folder named "Cinema Recommender" in the IDE
 Step 9.
 
 ```
-Run the main application named "app.py"
+Run the main application named "app.py" 
 ```
 
 ### How to use
